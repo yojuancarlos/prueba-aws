@@ -1,0 +1,148 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: universidadcaldas
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: aws-lamda-crud-node
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  httpApi:
+    # <-- Agrega esta sección para CORS global
+    cors:
+      allowedOrigins:
+        - http://localhost:5173 # Origen de tu frontend
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+        - X-Amz-Date
+      allowedMethods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      allowCredentials: true
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - s3:PutObject  
+        - s3:GetObject  
+        - s3:DeleteObject  
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - arn:aws:dynamodb:us-east-1:575108947357:table/taskstable
+        - arn:aws:s3:::archivosalmacenados/*
+
+functions:
+  hello:
+    handler: SRC/handler.hello
+    events:
+      - httpApi:
+          path: /
+          method: get
+          cors: true
+  createTask:
+    handler: SRC/addTask.addTask
+    events:
+      - httpApi:
+          path: /task
+          method: post
+          cors: true
+  getTask:
+    handler: SRC/getTask.getTask
+    events:
+      - httpApi:
+          path: /tasks
+          method: get
+          cors: true
+  getTaskById:
+    handler: SRC/getTaskById.getTaskById
+    events:
+      - httpApi:
+          path: /tasks/{id}
+          method: get
+          cors: true
+  updateTask:
+    handler: SRC/updateTask.updateTask
+    events:
+      - httpApi:
+          path: /tasks/{id}
+          method: put
+          cors: true
+  deleteTask:
+    handler: SRC/deleteTask.deleteTask
+    events:
+      - httpApi:
+          path: /tasks/{id}
+          method: delete
+          cors: true
+
+resources:
+  Resources:
+    taskstable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: taskstable
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+    TaskFilesBucket:
+      # Nuevo bucket S3
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: archivosalmacenados-myapp-prod
+        AccessControl: Private
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - '*'
+              AllowedMethods:
+                - PUT
+                - POST
+                - DELETE
+              AllowedOrigins:
+                - http://localhost:5173
+              ExposedHeaders: []
+              MaxAge: 3000
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${AWS::StackName}
+        - ResourceName: Api
+      StageName: Prod
+      DefinitionBody:
+        openapi: '3.0'
+        info: {}
+        paths:
+          /:
+            get:
+              responses: {}
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+  Topic:
+    Type: AWS::SNS::Topic
+  Table:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
